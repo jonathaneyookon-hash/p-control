@@ -37,11 +37,14 @@ jobs:
             npx cap sync android
           fi
 
-      - name: Force landscape orientation in manifest
+      - name: Force landscape orientation and allow local network traffic
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
           if ! grep -q 'android:screenOrientation="landscape"' "$MANIFEST"; then
             sed -i '/android:name=".MainActivity"/a\            android:screenOrientation="landscape"' "$MANIFEST"
+          fi
+          if ! grep -q 'android:usesCleartextTraffic' "$MANIFEST"; then
+            sed -i 's/<application/<application android:usesCleartextTraffic="true"/' "$MANIFEST"
           fi
           cat "$MANIFEST"
 
