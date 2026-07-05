@@ -1,0 +1,6 @@
+{
+  "appId": "com.ptstudios.pcontrol",
+  "appName": "P-Control",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
