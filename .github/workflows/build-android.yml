@@ -37,15 +37,51 @@ jobs:
             npx cap sync android
           fi
 
-      - name: Force landscape orientation and allow local network traffic
+      - name: Force landscape orientation
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
           if ! grep -q 'android:screenOrientation="landscape"' "$MANIFEST"; then
             sed -i '/android:name=".MainActivity"/a\            android:screenOrientation="landscape"' "$MANIFEST"
           fi
+          cat "$MANIFEST"
+
+      - name: Allow cleartext (ws:// and http://) traffic to LAN devices
+        run: |
+          # This is the actual fix for OBS not connecting: Capacitor's default
+          # network_security_config.xml only allows cleartext to "localhost".
+          # A networkSecurityConfig resource reference always overrides a plain
+          # usesCleartextTraffic="true" attribute, so that attribute alone does
+          # nothing here. We overwrite the resource itself to allow cleartext
+          # traffic to any host, which is required to reach OBS/vMix on your LAN.
+          RES_XML=android/app/src/main/res/xml/network_security_config.xml
+          mkdir -p "$(dirname "$RES_XML")"
+          cat > "$RES_XML" << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
+EOF
+
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+
+          # Make sure the manifest actually references this file.
+          if ! grep -q 'android:networkSecurityConfig' "$MANIFEST"; then
+            sed -i 's/<application/<application android:networkSecurityConfig="@xml\/network_security_config"/' "$MANIFEST"
+          fi
+
+          # Belt-and-braces: also set usesCleartextTraffic in case a future
+          # Capacitor version stops shipping a networkSecurityConfig by default.
           if ! grep -q 'android:usesCleartextTraffic' "$MANIFEST"; then
             sed -i 's/<application/<application android:usesCleartextTraffic="true"/' "$MANIFEST"
           fi
+
+          echo "--- network_security_config.xml ---"
+          cat "$RES_XML"
+          echo "--- AndroidManifest.xml ---"
           cat "$MANIFEST"
 
       - name: Build APK
