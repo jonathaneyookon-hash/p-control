@@ -35,7 +35,24 @@ export default function OBSController({ onBack }) {
     setConnectError("");
     try {
       const obs = new OBSWebSocket();
-      await obs.connect(`ws://${ip}:${port}`, password || undefined);
+
+      const CONNECT_TIMEOUT_MS = 8000;
+      const timeout = new Promise((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `Timed out after ${CONNECT_TIMEOUT_MS / 1000}s. The connection is hanging rather than being refused — this usually means a firewall, router client-isolation setting, or VPN is silently blocking traffic to ${ip}:${port}, not a wrong password.`
+              )
+            ),
+          CONNECT_TIMEOUT_MS
+        )
+      );
+
+      await Promise.race([
+        obs.connect(`ws://${ip}:${port}`, password || undefined),
+        timeout,
+      ]);
 
       await obs.call("SetStudioModeEnabled", { studioModeEnabled: true });
 
