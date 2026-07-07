@@ -55,16 +55,16 @@ jobs:
           # traffic to any host, which is required to reach OBS/vMix on your LAN.
           RES_XML=android/app/src/main/res/xml/network_security_config.xml
           mkdir -p "$(dirname "$RES_XML")"
-          cat > "$RES_XML" << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true">
-        <trust-anchors>
-            <certificates src="system" />
-        </trust-anchors>
-    </base-config>
-</network-security-config>
-EOF
+          {
+            echo '<?xml version="1.0" encoding="utf-8"?>'
+            echo '<network-security-config>'
+            echo '    <base-config cleartextTrafficPermitted="true">'
+            echo '        <trust-anchors>'
+            echo '            <certificates src="system" />'
+            echo '        </trust-anchors>'
+            echo '    </base-config>'
+            echo '</network-security-config>'
+          } > "$RES_XML"
 
           MANIFEST=android/app/src/main/AndroidManifest.xml
 
