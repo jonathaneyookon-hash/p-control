@@ -3,6 +3,9 @@
   "appName": "P-Control",
   "webDir": "dist",
   "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "http"
+  },
   "plugins": {
     "CapacitorHttp": {
       "enabled": true
