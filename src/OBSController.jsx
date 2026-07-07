@@ -30,9 +30,74 @@ export default function OBSController({ onBack }) {
   const [recording, setRecording] = useState(false);
   const [streaming, setStreaming] = useState(false);
 
+  const [debugLog, setDebugLog] = useState([]);
+  const addLog = (msg) =>
+    setDebugLog((prev) => [...prev, `${new Date().toLocaleTimeString()}  ${msg}`]);
+
+  // Opens a bare WebSocket with no OBS protocol involved, so we can tell
+  // whether the network path itself is open or blocked, independent of
+  // anything obs-websocket-js does with auth/handshakes.
+  const probeRawSocket = () =>
+    new Promise((resolve) => {
+      let settled = false;
+      let raw;
+      try {
+        raw = new WebSocket(`ws://${ip}:${port}`);
+      } catch (e) {
+        addLog(`Raw probe: threw immediately constructing WebSocket — ${e.message}`);
+        resolve();
+        return;
+      }
+
+      const probeTimeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          addLog(
+            `Raw probe: still NOT OPEN after 5s (readyState=${raw.readyState}). This means the network path to ${ip}:${port} is being silently blocked — firewall, router AP/client isolation, wrong IP, or a VPN — not an OBS password/protocol issue.`
+          );
+          resolve();
+        }
+      }, 5000);
+
+      raw.onopen = () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(probeTimeout);
+          addLog(
+            "Raw probe: OPENED successfully. Network path is fine — if OBS still fails past this point, it's an OBS-protocol/auth issue, not networking."
+          );
+          raw.close();
+          resolve();
+        }
+      };
+      raw.onerror = () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(probeTimeout);
+          addLog(
+            "Raw probe: error event fired (browsers hide the detail, but this confirms the socket failed at a low level, e.g. connection refused or blocked)."
+          );
+          resolve();
+        }
+      };
+      raw.onclose = (e) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(probeTimeout);
+          addLog(`Raw probe: closed immediately. code=${e.code} reason="${e.reason || "(none)"}"`);
+          resolve();
+        }
+      };
+    });
+
   const connect = async () => {
     setConnecting(true);
     setConnectError("");
+    setDebugLog([]);
+    addLog(`Starting connection attempt to ws://${ip}:${port}`);
+
+    await probeRawSocket();
+
     try {
       const obs = new OBSWebSocket();
 
@@ -49,10 +114,12 @@ export default function OBSController({ onBack }) {
         )
       );
 
+      addLog("Attempting obs-websocket-js connect + auth handshake...");
       await Promise.race([
         obs.connect(`ws://${ip}:${port}`, password || undefined),
         timeout,
       ]);
+      addLog("obs-websocket-js: connected and authenticated successfully.");
 
       await obs.call("SetStudioModeEnabled", { studioModeEnabled: true });
 
@@ -76,6 +143,7 @@ export default function OBSController({ onBack }) {
       obsRef.current = obs;
       setConnected(true);
     } catch (err) {
+      addLog(`obs-websocket-js error: name=${err?.name || "?"} message=${err?.message || String(err)}`);
       setConnectError(err.message || "Could not connect. Check IP, port, and password.");
     } finally {
       setConnecting(false);
@@ -152,6 +220,17 @@ export default function OBSController({ onBack }) {
           >
             {connecting ? "CONNECTING..." : "CONNECT"}
           </button>
+
+          {debugLog.length > 0 && (
+            <div className="bg-[#0a0a0a] border border-gray-800 rounded-md p-3 mt-2 max-h-56 overflow-y-auto">
+              <div className="text-gray-500 text-[10px] tracking-widest mb-2">
+                DEBUG LOG (screenshot this if it's still failing)
+              </div>
+              <pre className="text-[10px] text-gray-300 whitespace-pre-wrap leading-relaxed font-mono">
+                {debugLog.join("\n")}
+              </pre>
+            </div>
+          )}
 
           <div className="text-gray-500 text-[11px] mt-4 leading-relaxed">
             In OBS: Tools → WebSocket Server Settings → make sure it's enabled,
