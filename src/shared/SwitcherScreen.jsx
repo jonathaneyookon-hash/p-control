@@ -1,53 +1,37 @@
-import React from "react";
-import { Settings, Play, RotateCcw, Infinity as InfinityIcon } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Settings, Play, RotateCcw, Infinity as InfinityIcon, Wifi, Volume2 } from "lucide-react";
 import LiveVideo from "./LiveVideo.jsx";
+import { ProfilesPanel, useProfiles } from "./ControlTools.jsx";
 
 export const TRANSITIONS = ["CUT", "FADE", "MERGE", "WIPE"];
 export const OVERLAYS = ["O1", "O2", "O3", "O4"];
 
-export default function SwitcherScreen({ backend, ip, port, obs, sources, previewLabel, programLabel, onSelectPreview, onTransition, flash, recording, streaming, onToggleRecording, onToggleStreaming }) {
-  return (
-    <div className="min-h-screen w-full bg-black text-white flex font-sans select-none">
-      <div className="flex-1 p-3 flex flex-col gap-3 min-w-0">
-        <div className="flex gap-3">
-          {backend === "obs" ? (
-            <LiveVideo backend="obs" ip={ip} port={port} obs={obs} sourceName={previewLabel} label="PREVIEW" accent="red" />
-          ) : (
-            <VideoBox label="PREVIEW" color="border-red-600" labelColor="text-red-500" sourceLabel={previewLabel} flashing={flash !== null} note="PREVIEW STATE" />
-          )}
-          <LiveVideo backend={backend} ip={ip} port={port} obs={obs} sourceName={programLabel} label="PROGRAM" accent="green" />
-        </div>
-
-        <div>
-          <div className="text-gray-400 text-xs tracking-widest mb-2">SOURCES ({sources.length})</div>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-            {sources.map((s) => <SourceTile key={s.id} source={s} isPreview={s.label === previewLabel} isProgram={s.label === programLabel} onClick={() => onSelectPreview(s)} />)}
-          </div>
-        </div>
-      </div>
-
-      <div className="w-[320px] sm:w-[380px] bg-[#0c0c0c] border-l border-gray-800 p-5 flex flex-col gap-6 shrink-0">
-        <div className="flex items-center justify-between"><span className="text-gray-300 text-sm tracking-widest font-semibold">TRANSITIONS</span><Settings size={18} className="text-gray-400" /></div>
-        <div className="grid grid-cols-2 gap-3">{TRANSITIONS.map((t) => <button key={t} onClick={() => onTransition(t)} className="bg-[#e8e6e1] hover:bg-white active:scale-[0.97] transition text-black font-bold tracking-wide rounded-md py-4 text-sm shadow">{t}</button>)}</div>
-        <div><div className="text-gray-400 text-xs tracking-widest mb-3">OVERLAYS</div><div className="grid grid-cols-4 gap-3">{OVERLAYS.map((o) => <button key={o} className="bg-[#1a1a1a] hover:bg-[#242424] border border-gray-700 rounded-md py-3 text-sm text-gray-200 font-semibold">{o}</button>)}</div></div>
-        <div className="flex items-center gap-3"><div className="w-1 h-6 bg-gray-500 rounded-full" /><div className="flex-1 h-2 bg-gray-800 rounded-full relative"><div className="absolute left-0 top-0 h-2 w-[92%] bg-gray-400 rounded-full" /><div className="absolute right-0 -top-1 w-4 h-4 rounded-full bg-white" /></div></div>
-        <div className="flex items-center justify-between px-2 -mt-3"><RotateCcw size={18} className="text-gray-400" /><Play size={18} className="text-gray-400" /><InfinityIcon size={18} className="text-gray-400" /></div>
-        <div className="grid grid-cols-3 gap-3 mt-auto">
-          <button onClick={onToggleRecording} className={`rounded-md py-4 font-bold text-sm tracking-wide transition ${recording ? "bg-red-500 text-white" : "bg-[#2a2a2a] text-gray-300 hover:bg-[#333333]"}`}>REC</button>
-          <button onClick={onToggleStreaming} className={`rounded-md py-4 font-bold text-sm tracking-wide transition ${streaming ? "bg-red-500 text-white" : "bg-[#2a2a2a] text-gray-300 hover:bg-[#333333]"}`}>STR</button>
-          <button className="rounded-md py-4 font-bold text-sm tracking-wide bg-[#2a2a2a] text-gray-300">EXT</button>
-        </div>
-      </div>
+export default function SwitcherScreen({ backend, ip, port, obs, sources, previewLabel, programLabel, onSelectPreview, onTransition, flash, recording, streaming, onToggleRecording, onToggleStreaming, thumbnails = {}, audio = [], onOverlay }) {
+  const profiles = useProfiles(backend);
+  const [tallyPulse, setTallyPulse] = useState(false);
+  const layoutCompact = profiles.active.layout === "compact";
+  useEffect(() => { setTallyPulse(true); const t = setTimeout(() => setTallyPulse(false), 180); return () => clearTimeout(t); }, [programLabel, previewLabel]);
+  const runMacro = async (macro) => { for (const action of macro.actions || []) { if (action.type === "TAKE") await onTransition(profiles.active.transition || "CUT"); if (action.type === "TRANSITION") await onTransition(action.value); } };
+  const measuredSources = useMemo(() => sources || [], [sources]);
+  return <div className="min-h-screen w-full bg-black text-white flex font-sans select-none">
+    <div className="flex-1 p-3 flex flex-col gap-3 min-w-0 overflow-y-auto">
+      <header className="flex items-center justify-between border-b border-gray-800 pb-2"><div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${tallyPulse ? "bg-white" : "bg-green-500"}`} /><span className="text-gray-200 text-xs tracking-[0.2em] font-bold">P-CONTROL / {backend.toUpperCase()}</span></div><div className="flex items-center gap-2 text-[9px] tracking-widest text-gray-500"><Wifi size={12} /> LAN <span className="text-green-500">CONNECTED</span></div></header>
+      <div className="flex gap-3"><LiveVideo backend={backend} ip={ip} port={port} obs={obs} sourceName={previewLabel} label="PREVIEW" accent="green" /><LiveVideo backend={backend} ip={ip} port={port} obs={obs} sourceName={programLabel} label="PROGRAM / ON AIR" accent="red" /></div>
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4"><StatusCard title="PROGRAM" value={programLabel || "—"} accent="red" /><StatusCard title="PREVIEW" value={previewLabel || "—"} accent="green" /><StatusCard title="REC" value={recording ? "RECORDING" : "STOPPED"} accent={recording ? "red" : "gray"} /><StatusCard title="STREAM" value={streaming ? "LIVE" : "OFFLINE"} accent={streaming ? "red" : "gray"} /></div>
+      <section><div className="flex items-center justify-between mb-2"><div className="text-gray-400 text-xs tracking-widest">SOURCES ({measuredSources.length})</div><div className="text-[9px] text-gray-600 tracking-widest">TAP = PREVIEW</div></div><div className={`grid ${layoutCompact ? "grid-cols-4 md:grid-cols-6" : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5"} gap-2`}>{measuredSources.map((s) => <SourceTile key={s.id} source={s} image={thumbnails[s.label]} isPreview={s.label === previewLabel} isProgram={s.label === programLabel} onClick={() => onSelectPreview(s)} />)}</div></section>
+      <section className="bg-[#0c0c0c] border border-gray-800 rounded-md p-3"><div className="flex items-center gap-2 mb-2 text-gray-400 text-[10px] tracking-widest"><Volume2 size={13} /> AUDIO / MONITOR</div><div className="space-y-2">{(audio.length ? audio : [{ name: "MASTER", level: 0 }]).slice(0, 6).map((a) => <Meter key={a.name} name={a.name} level={a.level} />)}</div></section>
     </div>
-  );
+    <aside className="w-[300px] sm:w-[340px] bg-[#0c0c0c] border-l border-gray-800 p-4 flex flex-col gap-4 shrink-0 overflow-y-auto">
+      <div className="flex items-center justify-between"><span className="text-gray-300 text-sm tracking-widest font-semibold">SWITCHER</span><Settings size={18} className="text-gray-400" /></div>
+      <div className="grid grid-cols-2 gap-2">{TRANSITIONS.map((t) => <button key={t} onClick={() => { profiles.save({ transition: t }); onTransition(t); }} className={`rounded-md py-4 font-bold tracking-wide text-sm transition active:scale-[0.97] ${flash === t ? "bg-white text-black" : "bg-[#e8e6e1] text-black hover:bg-white"}`}>{t}</button>)}</div>
+      <div><div className="text-gray-400 text-xs tracking-widest mb-2">OVERLAYS</div><div className="grid grid-cols-4 gap-2">{OVERLAYS.map((o) => <button key={o} onClick={() => onOverlay?.(o)} className="bg-[#1a1a1a] hover:bg-[#242424] border border-gray-700 rounded-md py-3 text-sm text-gray-200 font-semibold">{o}</button>)}</div></div>
+      <div><div className="text-gray-400 text-xs tracking-widest mb-2">T-BAR / FADER</div><input type="range" min="0" max="100" defaultValue="0" className="w-full accent-white" /></div>
+      <div className="flex items-center justify-between px-2 text-gray-400"><RotateCcw size={18} /><Play size={18} /><InfinityIcon size={18} /></div>
+      <div className="grid grid-cols-3 gap-2 mt-auto"><button onClick={onToggleRecording} className={`rounded-md py-4 font-bold text-sm ${recording ? "bg-red-500 text-white" : "bg-[#2a2a2a] text-gray-300"}`}>REC</button><button onClick={onToggleStreaming} className={`rounded-md py-4 font-bold text-sm ${streaming ? "bg-red-500 text-white" : "bg-[#2a2a2a] text-gray-300"}`}>STR</button><button className="rounded-md py-4 font-bold text-sm bg-[#2a2a2a] text-gray-300">FTB</button></div>
+      <ProfilesPanel profiles={profiles} onRunMacro={runMacro} />
+    </aside>
+  </div>;
 }
-
-function VideoBox({ label, color, labelColor, sourceLabel, flashing, note }) {
-  return <div className="flex-1 min-w-0"><div className={`flex items-center justify-between text-xs tracking-widest font-semibold mb-1 ${labelColor}`}><span>{label}</span>{note && <span className="text-[9px] text-gray-500">{note}</span>}</div><div className={`aspect-video bg-black border-2 ${color} rounded-sm flex items-center justify-center transition-opacity duration-150 ${flashing ? "opacity-40" : "opacity-100"}`}><span className="text-gray-600 text-xs tracking-widest uppercase text-center px-2">{sourceLabel || "No source"}</span></div></div>;
-}
-
-function SourceTile({ source, isPreview, isProgram, onClick }) {
-  const borderClass = isProgram ? "border-red-500" : "border-transparent";
-  const ringClass = isPreview ? "ring-2 ring-green-400 ring-inset" : "";
-  return <button onClick={onClick} className={`relative bg-[#141414] rounded-md border-2 ${borderClass} ${ringClass} p-2 text-left hover:bg-[#1c1c1c] transition`}><div className="text-gray-500 text-[11px] font-semibold mb-6">{source.id}</div><div className="text-[13px] leading-tight text-gray-100 font-medium truncate">{source.label}</div></button>;
-}
+function StatusCard({ title, value, accent }) { const c = accent === "red" ? "text-red-500" : accent === "green" ? "text-green-500" : "text-gray-500"; return <div className="bg-[#0c0c0c] border border-gray-800 rounded p-2"><div className="text-[9px] tracking-widest text-gray-600">{title}</div><div className={`text-[11px] font-semibold truncate ${c}`}>{value}</div></div>; }
+function Meter({ name, level }) { const pct = Math.max(0, Math.min(100, Number(level) || 0)); return <div className="flex items-center gap-2"><span className="w-14 text-[9px] text-gray-500 truncate">{name}</span><div className="h-2 flex-1 bg-gray-900 rounded overflow-hidden"><div className="h-full bg-gray-400 transition-all" style={{ width: `${pct}%` }} /></div><span className="w-8 text-right text-[9px] text-gray-600">{Math.round(pct)}%</span></div>; }
+function SourceTile({ source, image, isPreview, isProgram, onClick }) { const border = isProgram ? "border-red-500" : isPreview ? "border-green-500" : "border-gray-800"; return <button onClick={onClick} className={`relative overflow-hidden bg-[#111] rounded-md border-2 ${border} text-left hover:bg-[#181818] active:scale-[0.98] transition aspect-video`}>{image ? <img src={image} alt="" className="absolute inset-0 w-full h-full object-cover opacity-90" /> : <div className="absolute inset-0 bg-gradient-to-br from-[#202020] to-[#080808]" />}<div className="absolute inset-x-0 bottom-0 bg-black/70 p-2"><div className="text-[9px] text-gray-500">{source.id}</div><div className="text-[11px] text-white font-semibold truncate">{source.label}</div></div>{isProgram && <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-red-600 text-[8px] font-bold">PGM</span>}{isPreview && <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-green-600 text-[8px] font-bold">PVW</span>}</button>; }
